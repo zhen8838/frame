@@ -1,6 +1,7 @@
 import numpy as np
 from operator import mul
 from math import ceil
+from src.system import System
 op_type_dicts = {0: 'FC', 1: 'CONV2D', 2: 'DWCONV', 3: 'GEMM', 4: 'Logit', 5: 'Attend'}
 class Operator(object):
     def __init__(self, dim, density=(1.0,1.0,1.0)):
@@ -42,6 +43,9 @@ class Operator(object):
         return np.prod(tensor)
 
     def get_num_ops(self):
+        """ 
+          获得operator的FLOPs
+        """
         pass
 
     def get_effective_dim_len(self):
@@ -50,19 +54,28 @@ class Operator(object):
     def get_num_data(self):
         return sum(self.get_sz_list())
 
-    def get_effective_num_data(self, system):
+    def get_effective_num_data(self, system:System):
+        """ 
+          统计所有的数据交换
+        """
         return sum(self.get_sz_list(system))
 
-    def get_ideal_compute_time(self, system):
-        return self.get_effective_num_ops(system) * system.get_bit_multiplier(type='C')/system.op_per_sec
+    def get_ideal_compute_time(self, system:System):
+        """ 
+          计算理论执行时间
+        """
+        return self.get_effective_num_ops(system) * system.get_bit_multiplier(type='C') / system.op_per_sec
 
-    def get_ideal_memory_time(self, system):
+    def get_ideal_memory_time(self, system:System):
+        """ 
+          这里计算在sram和ddr上交换数据的实际时间, 分为onchip和offchip.
+        """
         sz_list = self.get_sz_list(system)
         memory_time_onchip = 0
         memory_time_offchip = 0
         for tensor_sz in sz_list:
-            memory_time_onchip += tensor_sz * system.get_bit_multiplier(type='M')/ system.onchip_mem_bw
-            memory_time_offchip += tensor_sz * system.get_bit_multiplier(type='M')/ system.offchip_mem_bw
+            memory_time_onchip += tensor_sz * system.get_bit_multiplier(type='M') / system.onchip_mem_bw
+            memory_time_offchip += tensor_sz * system.get_bit_multiplier(type='M') / system.offchip_mem_bw
         return  memory_time_offchip, memory_time_onchip
 
 
@@ -80,7 +93,7 @@ class Operator(object):
 
 
 
-    def get_effective_mxu_mapping(self, system):
+    def get_effective_mxu_mapping(self, system:System):
         left, upper, contract, outer = self.get_gemms()
         if system.skip_compute:
             contract = contract * self.density_w * self.density_a
@@ -97,7 +110,7 @@ class Operator(object):
         effective_mxu_shape = [mxu_shape[0]] + [m for m in effective_mxu_shape]
         return effective_mxu_shape
 
-    def get_compute_time(self, system):
+    def get_compute_time(self, system:System):
         if system.mxu_shape is not None:
             mxu_mapping, _ = self.get_effective_mxu_mapping(system)
             effective_mxu_shape = self.get_effective_mxu_shape(system.mxu_shape)
@@ -106,7 +119,7 @@ class Operator(object):
             compute_efficiency = 1
         return self.get_effective_num_ops(system) * system.get_bit_multiplier(type='C')/system.op_per_sec / compute_efficiency, compute_efficiency
 
-    def get_mxu_energy(self, system):
+    def get_mxu_energy(self, system:System):
         if system.mxu_shape is not None:
             mxu_mapping, streaming_dim = self.get_effective_mxu_mapping(system)
             power_gating_mxu_shape = [ m//g for m, g in zip(system.mxu_shape, system.power_gating_granularity)]
@@ -129,7 +142,7 @@ class Operator(object):
     #     efficiency = dim_size/ (iters * mxu_size)
     #     return efficiency
     #
-    # def get_compute_time(self, system):
+    # def get_compute_time(self, system:System):
     #
     #     if system.mxu_shape is not None:
     #         left, upper, contract, outer = self.get_gemms()
@@ -146,15 +159,13 @@ class Operator(object):
     #         compute_efficiency = 1.0
     #     return self.get_effective_num_ops(system) * system.get_bit_multiplier(type='C')/system.op_per_sec  / compute_efficiency
 
-    def get_compute_energy(self, system):
+    def get_compute_energy(self, system:System):
         return self.get_effective_num_ops(system)  * system.energy_per_mac
 
-
-
-    def get_effective_num_ops(self, system):
+    def get_effective_num_ops(self, system:System):
         if system.skip_compute:
             if system.skip_compute_on_noopt_output:
-                return self.get_num_ops() * self.density_w * self.density_a *self.density_o
+                return self.get_num_ops() * self.density_w * self.density_a * self.density_o
             else:
                 return self.get_num_ops() * self.density_w * self.density_a
         else:
@@ -172,7 +183,7 @@ class Operator(object):
         return bits
 
 
-    def get_sz_list(self, system=None, index_mem=False):
+    def get_sz_list(self, system:System=None, index_mem=False):
         if system:
             if system.compress_mem:
                 sz_list = [sz * density for sz, density in zip(self.get_sz_list(), self.get_density_list())]
@@ -193,7 +204,7 @@ class Operator(object):
     def get_loc_list(self):
         return [self.input_a_loc, self.input_w_loc, self.output_loc]
 
-    def get_memory_time(self, system):
+    def get_memory_time(self, system:System):
         sz_list = self.get_sz_list(system)
         loc_list = self.get_loc_list()
         memory_time = 0
@@ -207,7 +218,7 @@ class Operator(object):
             memory_time += tensor_sz * system.get_bit_multiplier(type='M')/bw
         return memory_time
 
-    def get_memory_energy(self, system):
+    def get_memory_energy(self, system:System):
         sz_list = self.get_sz_list(system)
         loc_list = self.get_loc_list()
         memorgy_energy = 0
@@ -232,15 +243,15 @@ class Operator(object):
 
         return onchip_mem_occupancy
 
-    def get_roofline(self, system, unit):
+    def get_roofline(self, system:System, unit):
         ideal_compute_time = self.get_ideal_compute_time(system=system)
         ideal_complete_offchip_time, ideal_complete_onchip_time = self.get_ideal_memory_time(system=system)
         # x2 for ops -> float ops
-        num_ops = self.get_effective_num_ops(system) * 2
+        num_ops = self.get_effective_num_ops(system) * system.get_bit_multiplier(type="C")
         num_data = self.get_effective_num_data(system) * system.get_bit_multiplier(type='M')
-        op_intensity = num_ops/num_data
+        op_intensity = num_ops / num_data
 
-        ideal_exec_time_complete_offchip = max(ideal_compute_time, ideal_complete_offchip_time)
+        ideal_exec_time_complete_offchip = max(ideal_compute_time, ideal_complete_offchip_time) # 实际上完成时间得是max(计算,数据传输)
         ideal_exec_time_complete_onchip = max(ideal_compute_time, ideal_complete_onchip_time)
 
         ideal_thrpt_complete_offchip = num_ops/ideal_exec_time_complete_offchip

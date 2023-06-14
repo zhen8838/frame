@@ -48,7 +48,7 @@ def analysis_model(model_dims, system, unit, densities):
     for i, (dim, density) in enumerate(zip(model_dims, densities)):
         type = op_type_dicts[dim[-1]]
         operator = getattr(operators, type)
-        operator_instance = operator(dim=dim, density=density)
+        operator_instance:Operator = operator(dim=dim, density=density)
         roofline = operator_instance.get_roofline(system=system, unit=unit)
         if i==0:
             column = roofline.keys()

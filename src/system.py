@@ -1,9 +1,10 @@
+from src.unit import Unit
 import numpy as np
 import math
 class System(object):
-    compute_multiplier = {'int8': 1, 'bf16': 1, 'f32': 2}
+    compute_multiplier = {'int8': 1, 'bf16': 1, 'f32': 2} # 这个是计算FLOPs时的系数
     mem_multiplier = {'int8': 1, 'bf16': 2, 'f32': 4}
-    def __init__(self, unit, onchip_mem_bw=9000, offchip_mem_bw=900, on_chip_mem_size=float('Inf'),
+    def __init__(self, unit: Unit, onchip_mem_bw=9000, offchip_mem_bw=900, on_chip_mem_size=float('Inf'),
                  off_chip_mem_size=float('Inf'), compute_efficiency=1, memory_efficiency=1, flops=123.20768, mxu_shape=None,
                  frequency=940, bits='bf16', compress_mem=True, skip_compute=True, skip_compute_on_noopt_output=True,
                  pg_gran=None):
@@ -17,7 +18,8 @@ class System(object):
         self.mxu_shape = mxu_shape
         self.flops = unit.unit_to_raw(flops, type='C')
         # flops : # of floating point operations, flops/2 : # of (bf16) operations
-        self.op_per_sec = self.flops/2
+        # note 如果给进来时flops是按u8计算的, 这里就需要按实际计算精度去排. 但是可能不需要一直除2
+        self.op_per_sec = self.flops / self.compute_multiplier[bits]
         self.frequency = unit.unit_to_raw(frequency, type='F')
         self.bits = bits
         self.compress_mem = compress_mem

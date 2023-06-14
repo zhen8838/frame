@@ -52,8 +52,8 @@ class CONV2D(Operator):
 
 
     def get_num_ops(self):
-        B, K, C, Y, X, R, S = self.dim[:self.get_effective_dim_len()]
-        return np.prod([B, K, C, Y, X, R, S])
+        B, OC, IC, IH, IW, KH, KW = self.dim[:self.get_effective_dim_len()]
+        return np.prod([B, OC, IC, IH, IW, KH, KW])
 
 class GEMM(Operator):
     def __init__(self, dim, density):
